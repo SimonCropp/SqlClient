@@ -443,7 +443,6 @@ namespace Microsoft.Data.SqlClient
                 VerifyEndExecuteState((Task)asyncResult, endMethod, fullCheckForColumnEncryption: true);
             }
             
-            bool processFinallyBlock = true;
             try
             {
                 // If this is not for internal usage, notify the dependency.
@@ -502,17 +501,9 @@ namespace Microsoft.Data.SqlClient
                     reader?.Close();
                 }
             }
-            catch (Exception e)
-            {
-                processFinallyBlock = ADP.IsCatchableExceptionType(e);
-                throw;
-            }
             finally
             {
-                if (processFinallyBlock)
-                {
-                    PutStateObject();
-                }
+                PutStateObject();
             }
             
             Debug.Assert(_stateObj == null, "non-null state object in EndExecuteNonQuery");
@@ -748,7 +739,6 @@ namespace Microsoft.Data.SqlClient
         {
             Debug.Assert(!asyncWrite || isAsync, "AsyncWrite should be always accompanied by Async");
 
-            bool processFinallyBlock = true;
             try
             {
                 // @TODO: I suspect the reconnect and re-run process is used extensively through the code. We can likely factor this out.
@@ -832,14 +822,9 @@ namespace Microsoft.Data.SqlClient
                     }
                 }
             }
-            catch (Exception e)
-            {
-                processFinallyBlock = ADP.IsCatchableExceptionType(e);
-                throw;
-            }
             finally
             {
-                if (processFinallyBlock && !isAsync)
+                if (!isAsync)
                 {
                     // When executing Async, we need to keep the _stateObj alive...
                     PutStateObject();

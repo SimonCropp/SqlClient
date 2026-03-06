@@ -1200,7 +1200,6 @@ namespace Microsoft.Data.SqlClient
                     // Validate the command outside the try\catch to avoid putting the _stateObj on error
                     ValidateCommand(isAsync: false);
 
-                    bool processFinallyBlock = true;
                     try
                     {
                         // NOTE: The state object isn't actually needed for this, but it is still here for back-compat (since it does a bunch of checks)
@@ -1218,20 +1217,11 @@ namespace Microsoft.Data.SqlClient
 
                         InternalPrepare();
                     }
-                    // @TODO: CER Exception Handling was removed here (see GH#3581)
-                    catch (Exception e)
-                    {
-                        processFinallyBlock = ADP.IsCatchableExceptionType(e);
-                        throw;
-                    }
                     finally
                     {
-                        if (processFinallyBlock)
-                        {
-                            // The command is now officially prepared
-                            _hiddenPrepare = false;
-                            ReliablePutStateObject();
-                        }
+                        // The command is now officially prepared
+                        _hiddenPrepare = false;
+                        ReliablePutStateObject();
                     }
                 }
             }
@@ -1376,11 +1366,9 @@ namespace Microsoft.Data.SqlClient
             SqlDataReader r = null;
 
             List<SqlParameter> parameters = new List<SqlParameter>();
-            bool processFinallyBlock = true;
 
             try
             {
-                // @TODO: Use using block
                 r = paramsCmd.ExecuteReader();
                 while (r.Read())
                 {
@@ -1510,20 +1498,12 @@ namespace Microsoft.Data.SqlClient
                     parameters.Add(p);
                 }
             }
-            catch (Exception e)
-            {
-                processFinallyBlock = ADP.IsCatchableExceptionType(e);
-                throw;
-            }
             finally
             {
-                if (processFinallyBlock)
-                {
-                    r?.Close();
+                r?.Dispose();
 
-                    // always unhook the user's connection
-                    paramsCmd.Connection = null;
-                }
+                // always unhook the user's connection
+                paramsCmd.Connection = null;
             }
 
             if (parameters.Count == 0)

@@ -3629,7 +3629,6 @@ namespace Microsoft.Data.SqlClient
                 return;
             }
 
-            bool processFinallyBlock = true;
             try
             {
 #if NET
@@ -3667,16 +3666,11 @@ namespace Microsoft.Data.SqlClient
 
                 ProcessSniPacket(packet, error);
             }
-            catch (Exception e)
-            {
-                processFinallyBlock = ADP.IsCatchableExceptionType(e);
-                throw;
-            }
             finally
             {
                 // pendingCallbacks may be 2 after decrementing, this indicates that a fatal timeout is occurring, and therefore we shouldn't complete the task
                 int pendingCallbacks = DecrementPendingCallbacks(false); // may dispose of GC handle.
-                if ((processFinallyBlock) && (source != null) && (pendingCallbacks < 2))
+                if ((source != null) && (pendingCallbacks < 2))
                 {
                     if (error == 0)
                     {

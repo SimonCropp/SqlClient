@@ -256,7 +256,6 @@ namespace Microsoft.Data.SqlClient
                 onSuccess: state =>
                 {
                     SqlCommand command = (SqlCommand)state;
-                    bool processFinallyBlockAsync = true;
                     bool decrementAsyncCountInFinallyBlockAsync = true;
 
                     try
@@ -295,17 +294,12 @@ namespace Microsoft.Data.SqlClient
                         }
                         #endif
                     }
-                    catch (Exception e)
-                    {
-                        processFinallyBlockAsync = ADP.IsCatchableExceptionType(e);
-                        throw;
-                    }
                     finally
                     {
                         command.PrepareTransparentEncryptionFinallyBlock(
-                            closeDataReader: processFinallyBlockAsync,
+                            closeDataReader: true,
                             decrementAsyncCount: decrementAsyncCountInFinallyBlockAsync,
-                            clearDataStructures: processFinallyBlockAsync,
+                            clearDataStructures: true,
                             wasDescribeParameterEncryptionNeeded: describeParameterEncryptionNeeded,
                             describeParameterEncryptionRpcOriginalRpcMap: describeParameterEncryptionRpcOriginalRpcMap,
                             describeParameterEncryptionDataReader: describeParameterEncryptionDataReader);
@@ -334,7 +328,6 @@ namespace Microsoft.Data.SqlClient
         {
             returnTask = Task.Run(() =>
             {
-                bool processFinallyBlockAsync = true;
                 bool decrementAsyncCountInFinallyBlockAsync = true;
 
                 try
@@ -372,17 +365,12 @@ namespace Microsoft.Data.SqlClient
                     }
                     #endif
                 }
-                catch (Exception e)
-                {
-                    processFinallyBlockAsync = ADP.IsCatchableExceptionType(e);
-                    throw;
-                }
                 finally
                 {
                     PrepareTransparentEncryptionFinallyBlock(
-                        closeDataReader: processFinallyBlockAsync,
+                        closeDataReader: true,
                         decrementAsyncCount: decrementAsyncCountInFinallyBlockAsync,
-                        clearDataStructures: processFinallyBlockAsync,
+                        clearDataStructures: true,
                         wasDescribeParameterEncryptionNeeded: describeParameterEncryptionNeeded,
                         describeParameterEncryptionRpcOriginalRpcMap: describeParameterEncryptionRpcOriginalRpcMap,
                         describeParameterEncryptionDataReader: describeParameterEncryptionDataReader);
@@ -606,8 +594,8 @@ namespace Microsoft.Data.SqlClient
                 return;
             }
 
-            // A flag to indicate if finallyblock needs to execute.
-            bool processFinallyBlock = true;
+            // A flag to indicate if the finally block should perform sync cleanup (not needed for async paths).
+            bool syncCleanup = !isAsync;
 
             // A flag to indicate if we need to decrement async count on the connection in finally block.
             bool decrementAsyncCountInFinallyBlock = false;
@@ -659,10 +647,9 @@ namespace Microsoft.Data.SqlClient
                     // Fire up another task to read the results of describe parameter encryption
                     if (fetchInputParameterEncryptionInfoTask is not null)
                     {
-                        // Mark that we should not process the finally block since we have async
-                        // execution pending. Note that this should be done outside the task's
-                        // continuation delegate.
-                        processFinallyBlock = false;
+                        // Do not perform sync cleanup since we have async execution pending.
+                        // Note that this should be done outside the task's continuation delegate.
+                        syncCleanup = false;
                         describeParameterEncryptionDataReader = GetParameterEncryptionDataReader(
                             out returnTask,
                             fetchInputParameterEncryptionInfoTask,
@@ -679,10 +666,9 @@ namespace Microsoft.Data.SqlClient
                         if (isAsync)
                         {
                             // If it was async, ending the reader is still pending
-                            // Mark that we should not process the finally block since we have async
-                            // execution pending. Note that this should be done outside the task's
-                            // continuation delegate.
-                            processFinallyBlock = false;
+                            // Do not perform sync cleanup since we have async execution pending.
+                            // Note that this should be done outside the task's continuation delegate.
+                            syncCleanup = false;
                             describeParameterEncryptionDataReader = GetParameterEncryptionDataReaderAsync(
                                 out returnTask,
                                 describeParameterEncryptionDataReader,
@@ -711,10 +697,8 @@ namespace Microsoft.Data.SqlClient
                         #endif
                     }
                 }
-                catch (Exception e)
+                catch (Exception)
                 {
-                    // @TODO: should this also check if processFinallyBlock has been cleared in the try?
-                    processFinallyBlock = ADP.IsCatchableExceptionType(e);
                     exceptionCaught = true;
                     throw;
                 }
@@ -722,11 +706,10 @@ namespace Microsoft.Data.SqlClient
                 {
                     // Free up the state only for synchronous execution. For asynchronous
                     // execution, free only if there was an exception.
-                    // @TODO: processFinallyBlock should probably switch this entire method?
                     PrepareTransparentEncryptionFinallyBlock(
-                        closeDataReader: (processFinallyBlock && !isAsync) || exceptionCaught,
+                        closeDataReader: syncCleanup || exceptionCaught,
                         decrementAsyncCount: decrementAsyncCountInFinallyBlock && exceptionCaught,
-                        clearDataStructures: (processFinallyBlock && !isAsync) || exceptionCaught,
+                        clearDataStructures: syncCleanup || exceptionCaught,
                         wasDescribeParameterEncryptionNeeded: describeParameterEncryptionNeeded,
                         describeParameterEncryptionRpcOriginalRpcMap: describeParameterEncryptionRpcOriginalRpcMap,
                         describeParameterEncryptionDataReader: describeParameterEncryptionDataReader);

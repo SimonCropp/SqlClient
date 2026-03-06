@@ -200,26 +200,17 @@ namespace Microsoft.Data.SqlClient
 
             Debug.Assert(innerConnection != null, "How can we be here if the connection is null?");
             SqlClientEventSource.Log.TryPoolerTraceEvent("SqlInternalTransaction.CloseFromConnection | RES | CPOOL | Object Id {0}, Closing transaction", ObjectID);
-            bool processFinallyBlock = true;
             try
             {
                 innerConnection.ExecuteTransaction(TransactionRequest.IfRollback, null, IsolationLevel.Unspecified, null, false);
             }
-            catch (Exception e)
-            {
-                processFinallyBlock = ADP.IsCatchableExceptionType(e);
-                throw;
-            }
             finally
             {
-                if (processFinallyBlock)
-                {
-                    // Always ensure we're zombied; 2005 will send an EnvChange that
-                    // will cause the zombie, but only if we actually go to the wire;
-                    // 7.0 and 2000 won't send the env change, so we have to handle
-                    // them ourselves.
-                    Zombie();
-                }
+                // Always ensure we're zombied; 2005 will send an EnvChange that
+                // will cause the zombie, but only if we actually go to the wire;
+                // 7.0 and 2000 won't send the env change, so we have to handle
+                // them ourselves.
+                Zombie();
             }
         }
 

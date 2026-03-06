@@ -622,7 +622,6 @@ namespace Microsoft.Data.SqlClient
             // TODO(GH-3604): Fix this failing assertion.
             // Debug.Assert(reader is not null);
 
-            bool processFinallyBlock = true;
             try
             {
                 // @TODO: Evaluate if forDescribeParameterEncryption/shouldCacheForAlwaysEncrypted are always opposites
@@ -635,23 +634,15 @@ namespace Microsoft.Data.SqlClient
                     shouldCacheForAlwaysEncrypted: !forDescribeParameterEncryption);
                 return reader;
             }
-            catch (Exception e)
-            {
-                processFinallyBlock = ADP.IsCatchableExceptionType(e);
-                throw;
-            }
             finally
             {
-                if (processFinallyBlock)
+                // Don't reset the state for internal End. The user End will do that eventually.
+                if (!isInternal)
                 {
-                    // Don't reset the state for internal End. The user End will do that eventually.
-                    if (!isInternal)
-                    {
-                        CachedAsyncState.ResetAsyncState();
-                    }
-
-                    PutStateObject();
+                    CachedAsyncState.ResetAsyncState();
                 }
+
+                PutStateObject();
             }
         }
 
@@ -1308,7 +1299,6 @@ namespace Microsoft.Data.SqlClient
 
             task = null;
             string optionSettings = null;
-            bool processFinallyBlock = true;
             bool decrementAsyncCountOnFailure = false;
 
             if (isAsync)
@@ -1571,24 +1561,19 @@ namespace Microsoft.Data.SqlClient
                         shouldCacheForAlwaysEncrypted: !describeParameterEncryptionRequest);
                 }
             }
-            catch (Exception e)
+            catch (Exception) when (decrementAsyncCountOnFailure)
             {
-                processFinallyBlock = ADP.IsCatchableExceptionType(e);
-
-                if (decrementAsyncCountOnFailure)
+                if (_activeConnection.InnerConnection is SqlConnectionInternal innerConnectionTds)
                 {
-                    if (_activeConnection.InnerConnection is SqlConnectionInternal innerConnectionTds)
-                    {
-                        // It may be closed
-                        innerConnectionTds.DecrementAsyncCount();
-                    }
+                    // It may be closed
+                    innerConnectionTds.DecrementAsyncCount();
                 }
 
                 throw;
             }
             finally
             {
-                if (processFinallyBlock && !isAsync)
+                if (!isAsync)
                 {
                     // When executing async, we need to keep the _stateObj alive...
                     PutStateObject();
