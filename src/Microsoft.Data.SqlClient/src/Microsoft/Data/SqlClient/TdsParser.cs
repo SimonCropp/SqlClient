@@ -2169,16 +2169,20 @@ namespace Microsoft.Data.SqlClient
         /// </summary>
         /// <param name="v">The value to serialize.</param>
         /// <returns>The serialized float.</returns>
-        internal byte[] SerializeFloat(float v)
+        internal byte[] SerializeFloat(float v, TdsParserStateObject stateObj)
         {
             if (Single.IsInfinity(v) || Single.IsNaN(v))
             {
                 throw ADP.ParameterValueOutOfRange(v.ToString());
             }
 
-            var bytes = new byte[4];
-            BinaryPrimitives.WriteInt32LittleEndian(bytes, BitConverterCompatible.SingleToInt32Bits(v));
-            return bytes;
+            if (stateObj._bIntBytes == null)
+            {
+                stateObj._bIntBytes = new byte[4];
+            }
+
+            BinaryPrimitives.WriteInt32LittleEndian(stateObj._bIntBytes, BitConverterCompatible.SingleToInt32Bits(v));
+            return stateObj._bIntBytes;
         }
 
         /// <summary>
@@ -2319,17 +2323,22 @@ namespace Microsoft.Data.SqlClient
         /// Serializes a double to the returned buffer.
         /// </summary>
         /// <param name="v">The value to serialize.</param>
+        /// <param name="stateObj"><see cref="TdsParserStateObject"/> containing the cached buffer bytes.</param>
         /// <returns>The serialized double.</returns>
-        internal byte[] SerializeDouble(double v)
+        internal byte[] SerializeDouble(double v, TdsParserStateObject stateObj)
         {
             if (double.IsInfinity(v) || double.IsNaN(v))
             {
                 throw ADP.ParameterValueOutOfRange(v.ToString());
             }
 
-            var bytes = new byte[8];
-            BinaryPrimitives.WriteInt64LittleEndian(bytes, BitConverter.DoubleToInt64Bits(v));
-            return bytes;
+            if (stateObj._bLongBytes == null)
+            {
+                stateObj._bLongBytes = new byte[8];
+            }
+
+            BinaryPrimitives.WriteInt64LittleEndian(stateObj._bLongBytes, BitConverter.DoubleToInt64Bits(v));
+            return stateObj._bLongBytes;
         }
 
         /// <summary>
@@ -13418,12 +13427,12 @@ namespace Microsoft.Data.SqlClient
                 case TdsEnums.SQLFLTN:
                     if (type.FixedLength == 4)
                     {
-                        return SerializeFloat((Single)value);
+                        return SerializeFloat((Single)value, stateObj);
                     }
                     else
                     {
                         Debug.Assert(type.FixedLength == 8, "Invalid length for SqlDouble type!");
-                        return SerializeDouble((Double)value);
+                        return SerializeDouble((Double)value, stateObj);
                     }
 
                 case TdsEnums.SQLBIGBINARY:
@@ -13620,12 +13629,12 @@ namespace Microsoft.Data.SqlClient
                 case TdsEnums.SQLFLTN:
                     if (type.FixedLength == 4)
                     {
-                        return SerializeFloat(((SqlSingle)value).Value);
+                        return SerializeFloat(((SqlSingle)value).Value, stateObj);
                     }
                     else
                     {
                         Debug.Assert(type.FixedLength == 8, "Invalid length for SqlDouble type!");
-                        return SerializeDouble(((SqlDouble)value).Value);
+                        return SerializeDouble(((SqlDouble)value).Value, stateObj);
                     }
 
                 case TdsEnums.SQLBIGBINARY:
