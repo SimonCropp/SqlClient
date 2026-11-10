@@ -2779,21 +2779,12 @@ namespace Microsoft.Data.SqlClient.Connection
                         delegatedTransaction?.Transaction?.TransactionInformation?.LocalIdentifier);
                 }
             }
+            // We do not want to eat the error if it is a fatal one, or if the parser is null
+            // or not logged in (the connection is no longer good).
             catch (SqlException e)
+                when (e.Class < TdsEnums.FATAL_ERROR_CLASS &&
+                      Parser?.State is TdsParserState.OpenLoggedIn)
             {
-                // we do not want to eat the error if it is a fatal one
-                if (e.Class >= TdsEnums.FATAL_ERROR_CLASS)
-                {
-                    throw;
-                }
-
-                if (Parser?.State is not TdsParserState.OpenLoggedIn)
-                {
-                    // If the parser is null or its state is not openloggedin, the connection is no
-                    // longer good.
-                    throw;
-                }
-
                 #if NETFRAMEWORK
                 ADP.TraceExceptionWithoutRethrow(e);
                 #endif
